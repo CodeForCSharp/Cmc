@@ -16,8 +16,9 @@ namespace Cmc.Expr
 	public class LambdaExpression : Expression
 	{
 		[CanBeNull] public Type DeclaredType;
-		[NotNull] public readonly StatementList Body;
+		[NotNull] public StatementList Body;
 		[NotNull] public readonly IList<VariableDeclaration> ParameterList;
+		[NotNull] public readonly ReturnLabelDeclaration EndLabel;
 		protected Type Type;
 
 		public LambdaExpression(
@@ -25,11 +26,13 @@ namespace Cmc.Expr
 			[NotNull] StatementList body,
 			// FEATURE #22
 			[CanBeNull] IList<VariableDeclaration> parameterList = null,
-			[CanBeNull] Type returnType = null) : base(metaData)
+			[CanBeNull] Type returnType = null,
+			[CanBeNull] ReturnLabelDeclaration endLabel = null) : base(metaData)
 		{
 			Body = body;
 			DeclaredType = returnType;
 			ParameterList = parameterList ?? new List<VariableDeclaration>(0);
+			EndLabel = endLabel ?? new ReturnLabelDeclaration(MetaData, "");
 		}
 
 		public override void SurroundWith(Environment environment)
@@ -42,7 +45,9 @@ namespace Cmc.Expr
 			}
 			foreach (var variableDeclaration in ParameterList)
 				variableDeclaration.SurroundWith(Env);
+			EndLabel.SurroundWith(Env);
 			var bodyEnv = new Environment(Env);
+			Env.Declarations.Add(EndLabel);
 			foreach (var variableDeclaration in ParameterList)
 				bodyEnv.Declarations.Add(variableDeclaration);
 			// FEATURE #37
@@ -56,12 +61,17 @@ namespace Cmc.Expr
 			recur.SurroundWith(Env);
 			bodyEnv.Declarations.Add(recur);
 			Body.SurroundWith(bodyEnv);
-			var retTypes = Body.FindReturnStatements().Select(i =>
+//			while (null != Body.OptimizedStatementList)
+//				Body = Body.OptimizedStatementList;
+			while (null != Body.ConvertedStatementList)
+				Body = Body.ConvertedStatementList;
+			Body.Statements.Add(EndLabel);
+			var retTypes = EndLabel.StatementsUsingThis.Select(i =>
 			{
-				i.WhereToJump = this;
+				i.ReturnLabel = EndLabel;
 				return i.Expression.GetExpressionType();
 			}).ToList();
-			// FEATURE #24
+//			Body.Flatten();
 			if (retTypes.Any(i => !Equals(i, DeclaredType ?? retTypes.First())))
 				Errors.Add(
 					$"{MetaData.GetErrorHeader()}ambiguous return types:\n" +
@@ -72,6 +82,18 @@ namespace Cmc.Expr
 				              ? retTypes.First()
 				              // FEATURE #19
 				              : new PrimaryType(MetaData, PrimaryType.NullType));
+			if (retTypes.Count > 1)
+			{
+				var varName = $"returnCollector{(ulong) GetHashCode()}";
+				Body.Statements.Insert(0, new VariableDeclaration(MetaData, varName, type: retType));
+				var returnValueCollector = new VariableExpression(MetaData, varName);
+				foreach (var endLabelStatement in EndLabel.StatementsUsingThis)
+					endLabelStatement.Unify(returnValueCollector);
+				Body.Statements.Add(new ReturnStatement(MetaData, returnValueCollector)
+				{
+					ReturnLabel = EndLabel
+				});
+			}
 			Type = new LambdaType(MetaData, (
 				from i in ParameterList
 				select i.Type).ToList(), retType);
@@ -92,38 +114,5 @@ namespace Cmc.Expr
 				select j)
 			.Concat(new[] {"  body:\n"})
 			.Concat(Body.Dump().Select(MapFunc2));
-	}
-
-	public class BuiltinLambda : LambdaExpression
-	{
-		public BuiltinLambda(
-			MetaData metaData,
-			[NotNull] StatementList body,
-			[NotNull] Type returnType,
-			[CanBeNull] IList<VariableDeclaration> parameterList = null) :
-			base(metaData, body, parameterList ?? new List<VariableDeclaration>(), returnType)
-		{
-		}
-
-		public override void SurroundWith(Environment environment)
-		{
-			Env = environment;
-			Body.SurroundWith(Env);
-			Type = new LambdaType(MetaData, (
-				from i in ParameterList
-				select i.Type).ToList(), DeclaredType);
-		}
-
-		public override IEnumerable<string> Dump() => new[]
-			{
-				"built-in lambda:\n",
-				"  type:\n"
-			}
-			.Concat(GetExpressionType().Dump().Select(MapFunc2))
-			.Concat(new[] {"  parameters:\n"})
-			.Concat(
-				from i in ParameterList
-				from j in i.Dump().Select(MapFunc2)
-				select j);
 	}
 }

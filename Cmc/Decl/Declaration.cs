@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using Cmc.Core;
 using Cmc.Stmt;
 using JetBrains.Annotations;
@@ -10,17 +11,17 @@ namespace Cmc.Decl
 {
 	public class Declaration : Statement
 	{
-		public readonly Modifier Modifier;
+		public readonly Modifier[] Modifiers;
 		[NotNull] public readonly string Name;
-		public bool Used = false;
+		public ulong UsageCount;
 
 		public Declaration(
 			MetaData metaData,
 			[NotNull] string name,
-			Modifier modifier) : base(metaData)
+			Modifier[] modifiers = null) : base(metaData)
 		{
 			Name = name;
-			Modifier = modifier;
+			Modifiers = modifiers;
 		}
 	}
 
@@ -36,8 +37,8 @@ namespace Cmc.Decl
 			MetaData metaData,
 			[NotNull] string name,
 			[NotNull] Type type,
-			Modifier modifier = Modifier.Private)
-			: base(metaData, name, modifier)
+			Modifier[] modifiers = null)
+			: base(metaData, name, modifiers ?? new[] {Modifier.Private})
 		{
 			Type = type;
 		}
@@ -52,8 +53,8 @@ namespace Cmc.Decl
 			MetaData metaData,
 			[NotNull] string name,
 			[NotNull] IList<VariableDeclaration> fieldList,
-			Modifier modifier = Modifier.Private) :
-			base(metaData, name, modifier)
+			Modifier[] modifiers = null) :
+			base(metaData, name, modifiers ?? new[] {Modifier.Private})
 		{
 			FieldList = fieldList;
 			Type = new SecondaryType(metaData, name, this);
@@ -68,6 +69,28 @@ namespace Cmc.Decl
 		}
 	}
 
+	public class ExternDeclaration : Declaration
+	{
+		public Type Type;
+		public readonly bool Mutability;
+
+		public ExternDeclaration(
+			MetaData metaData,
+			[NotNull] string name,
+			Modifier[] modifiers,
+			Type type,
+			bool mutability = false) :
+			base(metaData, name, modifiers ?? new[] {Modifier.Private})
+		{
+			Type = type;
+			Mutability = mutability;
+		}
+
+		public override IEnumerable<string> Dump() => new[]
+				{$"extern declaration [{Name}]:\n"}
+			.Concat(Type.Dump());
+	}
+
 	/// <summary>
 	///     Probably useless
 	/// </summary>
@@ -79,13 +102,15 @@ namespace Cmc.Decl
 			MetaData metaData,
 			[NotNull] string name,
 			[NotNull] string content,
-			Modifier modifier = Modifier.Private) :
-			base(metaData, name, modifier)
+			Modifier[]modifiers = null) :
+			base(metaData, name, modifiers ?? new[] {Modifier.Private})
 		{
 			Content = content;
 		}
 
-		public override IEnumerable<string> Dump() =>
-			new[] {"macro(this shouldn't appear)\n"};
+		public override IEnumerable<string> Dump() => new[]
+		{
+			"macro(this shouldn't appear)\n"
+		};
 	}
 }

@@ -8,12 +8,32 @@ namespace Cmc.Stmt
 {
 	public class StatementList : Statement
 	{
-		[NotNull] public IList<Statement> Statements;
+		[NotNull] public List<Statement> Statements;
+		[NotNull] public List<Statement> JumpOutStatements;
 
 		public StatementList(
 			MetaData metaData,
 			params Statement[] statements) :
-			base(metaData) => Statements = statements;
+			base(metaData)
+		{
+			JumpOutStatements = new List<Statement>();
+			Statements = statements.ToList();
+		}
+
+		public StatementList(
+			MetaData metaData,
+			IEnumerable<Statement> statements) :
+			base(metaData)
+		{
+			JumpOutStatements = new List<Statement>();
+			Statements = statements.ToList();
+		}
+
+		public void Flatten() => Statements =
+			new List<Statement>(
+				from i in Statements
+				from j in i.ConvertedStatementList?.Statements ?? new[] {i}.ToList()
+				select j);
 
 		public override void SurroundWith(Environment environment)
 		{
@@ -34,10 +54,14 @@ namespace Cmc.Stmt
 				if (statement is ExpressionStatement expression)
 				{
 					var convertedResult = expression.Expression.ConvertedResult;
-					if (convertedResult != null)
+					if (convertedResult != null && 0 != convertedResult.ConvertedStatements.Count)
 					{
 						converted.AddRange(convertedResult.ConvertedStatements);
-						converted.Add(new ExpressionStatement(MetaData, convertedResult.ConvertedExpression));
+						expression.Expression = convertedResult.ConvertedExpression;
+						converted.Add(expression);
+						expression.Expression.ConvertedResult = null;
+						// expression might be a return statement
+						// converted.Add(new ExpressionStatement(MetaData, convertedResult.ConvertedExpression));
 					}
 					else
 						converted.Add(expression);
@@ -45,13 +69,8 @@ namespace Cmc.Stmt
 				else
 					converted.Add(statement);
 			}
-			ConvertedStatementList = new StatementList(MetaData, converted.ToArray());
+			ConvertedStatementList = new StatementList(MetaData, converted);
 		}
-
-		public override IEnumerable<ReturnStatement> FindReturnStatements() =>
-			from i in Statements
-			from j in i.FindReturnStatements()
-			select j;
 
 		public override IEnumerable<JumpStatement> FindJumpStatements() =>
 			from i in Statements

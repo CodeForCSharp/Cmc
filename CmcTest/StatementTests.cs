@@ -23,7 +23,6 @@ namespace CmcTest
 		{
 			foreach (var stmt in
 				new StatementList(MetaData.Empty,
-					new Statement(MetaData.Empty),
 					new Statement(MetaData.Empty)).Statements)
 				stmt.PrintDumpInfo();
 		}

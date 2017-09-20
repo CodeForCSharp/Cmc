@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Cmc.Core;
-using Cmc.Decl;
 using Cmc.Stmt;
 using JetBrains.Annotations;
 using Environment = Cmc.Core.Environment;
@@ -49,8 +48,6 @@ namespace Cmc.Expr
 		public override Type GetExpressionType() => new PrimaryType(MetaData, PrimaryType.NullType);
 
 		public override IEnumerable<string> Dump() => new[] {"null expression\n"};
-
-		public override string AtomicRepresentation() => "0";
 	}
 
 	/// <summary>
@@ -62,9 +59,6 @@ namespace Cmc.Expr
 		protected AtomicExpression(MetaData metaData) : base(metaData)
 		{
 		}
-
-		[NotNull]
-		public abstract string AtomicRepresentation();
 	}
 
 	public class StringLiteralExpression : Expression
@@ -133,45 +127,6 @@ namespace Cmc.Expr
 		public override Type GetExpressionType() => Member.GetExpressionType();
 
 		public override VariableExpression GetLhsExpression() => Member.GetLhsExpression();
-	}
-
-	public class VariableExpression : AtomicExpression
-	{
-		[NotNull] public readonly string Name;
-		[CanBeNull] public VariableDeclaration Declaration;
-
-		public VariableExpression(
-			MetaData metaData,
-			[NotNull] string name) :
-			base(metaData) => Name = name;
-
-		public override void SurroundWith(Environment environment)
-		{
-			base.SurroundWith(environment);
-			var declaration = Env.FindDeclarationByName(Name);
-			if (declaration is VariableDeclaration variableDeclaration)
-			{
-				Declaration = variableDeclaration;
-				Declaration.Used = true;
-			}
-			else
-				Errors.Add($"{MetaData.GetErrorHeader()}{declaration} isn't a variable");
-		}
-
-		public override Type GetExpressionType() =>
-			Declaration?.Type ?? throw new CompilerException("unknown type");
-
-		public override IEnumerable<string> Dump() => new[]
-			{
-				$"variable expression [{Name}]:\n",
-				"  type:\n"
-			}
-			.Concat(Declaration?.Type?.Dump().Select(MapFunc2) ?? new[] {"    cannot infer!\n"});
-
-		public override VariableExpression GetLhsExpression() => this;
-
-		public override string AtomicRepresentation() =>
-			Declaration?.LlvmNameGen() ?? throw new CompilerException($"{MetaData.GetErrorHeader()}undeclared {Name}.");
 	}
 
 	/// <summary>

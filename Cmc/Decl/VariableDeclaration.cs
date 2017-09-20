@@ -16,8 +16,6 @@ namespace Cmc.Decl
 	{
 		[NotNull] public readonly Expression Expression;
 		public readonly bool Mutability;
-		public ulong Address;
-		public int Align = 8;
 		public bool IsGlobal = false;
 		[CanBeNull] public Type Type;
 
@@ -27,8 +25,8 @@ namespace Cmc.Decl
 			[CanBeNull] Expression expression = null,
 			bool isMutable = false,
 			[CanBeNull] Type type = null,
-			Modifier modifier = Modifier.Private) :
-			base(metaData, name, modifier)
+			Modifier[] modifiers = null) :
+			base(metaData, name, modifiers ?? new[] {Modifier.Private})
 		{
 			Expression = expression ?? new NullExpression(MetaData);
 			Type = type;
@@ -52,13 +50,19 @@ namespace Cmc.Decl
 			// FEATURE #30
 			Type.SurroundWith(Env);
 			if (Type is UnknownType unknownType) Type = unknownType.Resolve();
-			if (Type is PrimaryType primaryType) Align = primaryType.Align;
 			// FEATURE #11
 			if (!string.Equals(exprType.ToString(), PrimaryType.NullType, Ordinal) &&
 			    !Equals(Type, exprType))
 				// FEATURE #9
 				Errors.Add($"{MetaData.GetErrorHeader()}type mismatch, expected: {Type}, actual: {exprType}");
 		}
+
+		/// <summary>
+		///  Conservatism inline
+		/// </summary>
+		/// <returns>if it should be inlined</returns>
+		public bool ShouldBeInlinedImmediately() =>
+			Mutability && (UsageCount <= 1 || Expression is AtomicExpression);
 
 		public override bool Equals(object obj) =>
 			obj is Declaration declaration && declaration.Name == Name;
@@ -71,7 +75,5 @@ namespace Cmc.Decl
 			.Concat(Type?.Dump().Select(MapFunc2) ?? new[] {"    cannot infer!\n"})
 			.Concat(new[] {"  initialize expression:\n"})
 			.Concat(Expression.Dump().Select(MapFunc2));
-
-		public string LlvmNameGen() => IsGlobal ? $"@glob{Address}" : $"%var{Address}";
 	}
 }

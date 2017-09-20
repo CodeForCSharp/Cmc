@@ -52,14 +52,15 @@ namespace Cmc
 					Gg();
 					break;
 				case TypeDeclaration typeDeclaration:
-					typeDeclaration.Used = true;
+					typeDeclaration.UsageCount++;
 					return typeDeclaration.Type;
 				case StructDeclaration structDeclaration:
-					structDeclaration.Used = true;
+					structDeclaration.UsageCount++;
 					return structDeclaration.Type;
 			}
-			Errors.Add(MetaData.GetErrorHeader() + Name + " is not a type");
-			throw new CompilerException($"cannot resolve {Name}");
+			var s = MetaData.GetErrorHeader() + Name + " is not a type";
+			Errors.Add(s);
+			throw new CompilerException(s);
 		}
 
 		public void Gg() =>
@@ -125,14 +126,11 @@ namespace Cmc
 		public override void SurroundWith(Environment environment)
 		{
 			base.SurroundWith(environment);
-			if (null == Struct) Struct = Env.FindDeclarationByName(Name) as StructDeclaration;
-			if (null != Struct)
-			{
-				Struct.Used = true;
-				return;
-			}
-			Errors.Add($"{MetaData.GetErrorHeader()}cannot resolve type {Name}");
-			throw new CompilerException();
+			if (null == Struct)
+				Struct = Env.FindDeclarationByName(Name) as StructDeclaration;
+			if (null == Struct)
+				Errors.AddAndThrow($"{MetaData.GetErrorHeader()}cannot resolve type {Name}");
+			else Struct.UsageCount++;
 		}
 
 		public override string ToString() => Name;
